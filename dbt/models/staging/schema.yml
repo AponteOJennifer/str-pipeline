@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: stg_listings
+    description: One row per listing per snapshot date.
+    columns:
+      - name: listing_snapshot_key
+        description: Composite key of listing and snapshot. The grain of this model.
+        tests: [unique, not_null]
+      - name: listing_id
+        tests: [not_null]
+      - name: snapshot_date
+        tests: [not_null]
+      - name: room_type
+        tests:
+          - accepted_values:
+              values: ["Entire home/apt", "Private room", "Shared room", "Hotel room"]
+
+  - name: stg_reviews
+    description: One row per review, deduplicated across snapshots.
+    columns:
+      - name: review_id
+        description: Unique after deduplication. The test proves the dedup works.
+        tests: [unique, not_null]
+      - name: listing_id
+        tests: [not_null]
+      - name: review_date
+        tests: [not_null]

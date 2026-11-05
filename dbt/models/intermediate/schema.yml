@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: int_snapshot_completeness
+    description: >
+      One row per snapshot with two independent completeness signals. Downstream
+      models filter on is_complete rather than silently averaging over a partial
+      scrape.
+    columns:
+      - name: snapshot_date
+        tests: [unique, not_null]
+      - name: is_complete
+        description: >
+          False when the listing count deviates from the median by more than the
+          configured tolerance. Warns rather than errors: an incomplete snapshot
+          is a known condition this project handles, not a build failure.
+        tests:
+          - accepted_values:
+              values: [true]
+              config:
+                severity: warn

@@ -1,0 +1,21 @@
+name: str_pipeline
+version: "1.0.0"
+profile: str_pipeline
+
+model-paths: ["models"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # A snapshot whose listing count deviates more than this from the median
+  # across snapshots is treated as incomplete.
+  completeness_tolerance: 0.15
+
+models:
+  str_pipeline:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table

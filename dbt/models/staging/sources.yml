@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Tables loaded by the Airflow ingestion DAG from Inside Airbnb.
+    schema: main
+    tables:
+      - name: raw_listings
+        description: One row per listing per snapshot date.
+      - name: raw_reviews
+        description: >
+          One row per review per snapshot. Each snapshot file contains every
+          review up to that date, so reviews repeat across snapshots.

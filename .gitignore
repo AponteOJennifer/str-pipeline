@@ -7,3 +7,9 @@ __pycache__/
 *.duckdb.wal
 .env
 .DS_Store
+
+# dbt build artifacts
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
