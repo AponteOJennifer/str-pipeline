@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: dim_listings
+    description: One row per listing, from the most recent complete snapshot.
+    columns:
+      - name: listing_id
+        tests: [unique, not_null]
+      - name: neighbourhood
+        tests: [not_null]
+
+  - name: fct_listing_month
+    description: >
+      Listing by month with demand, rate, and estimated occupancy. Occupancy is
+      an estimate built on reviews as a stay proxy, not observed bookings.
+    columns:
+      - name: listing_id
+        tests: [not_null]
+      - name: month_start
+        tests: [not_null]
+      - name: estimated_occupancy
+        description: Bounded between 0 and the configured max_occupancy cap.
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 0.70
+              inclusive: true
+              config:
+                severity: warn
+
+  - name: mart_neighbourhood_monthly
+    description: Occupancy, ADR and RevPAR by neighbourhood and month.
+    columns:
+      - name: neighbourhood
+        tests: [not_null]
+      - name: avg_revpar
+        tests: [not_null]

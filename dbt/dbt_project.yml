@@ -10,6 +10,16 @@ vars:
   # A snapshot whose listing count deviates more than this from the median
   # across snapshots is treated as incomplete.
   completeness_tolerance: 0.15
+  min_price_coverage: 0.50
+  demand_months: 36
+  continuity_tolerance: 0.02
+
+  # Occupancy estimator assumptions (Inside Airbnb's "San Francisco Model").
+  # Reviews proxy for stays. These three numbers are what the estimate rests on,
+  # so they live here rather than buried in SQL.
+  review_rate: 0.50          # share of stays that leave a review
+  default_length_of_stay: 3  # nights, when a listing's minimum is lower
+  max_occupancy: 0.70        # cap; sustained occupancy above this is implausible
 
 models:
   str_pipeline:
