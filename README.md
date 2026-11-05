@@ -105,13 +105,8 @@ the host and the snapshot date.
 
 ## Results
 
-<!-- Fill this in once the backfill has run. Numbers a reader can check:
-     - snapshots loaded and date range
-     - listings and reviews row counts
-     - how long a full backfill takes
-     - what happened when you reran a loaded date (row count unchanged) -->
-
-_To be filled in after the first backfill._
+Data quality: the March 2026 snapshot is incomplete.
+Listing counts hold around 11,100 to 11,300 across three snapshots but drop to 8,170 in March 2026. The drop is not proportional across room types, which rules out uniform sampling loss. Tracing individual listing IDs, 2,533 listings present in December are absent in March and present again in June, accounting for 82 percent of the shortfall. Listings do not exit and re-enter a market within a quarter, so the March snapshot is treated as incomplete and excluded from trend analysis rather than modeled on.
 
 ---
 
