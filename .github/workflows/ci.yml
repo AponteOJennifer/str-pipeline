@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dbt
+        run: pip install "dbt-core==1.9.2" "dbt-duckdb==1.9.2" "duckdb>=1.1"
+
+      # Catches syntax errors in the DAGs and the forecast package without
+      # needing Airflow or scikit-learn installed in CI.
+      - name: Compile-check the Python
+        run: python -m compileall -q dags forecast ci
+
+      # The real warehouse is 641 MB and gitignored, so CI builds its own.
+      # The fixture is seeded with the two defects found in the real data.
+      - name: Build the fixture warehouse
+        run: python ci/build_fixture.py --out data/ci.duckdb
+
+      - name: dbt deps
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+        run: dbt deps
+
+      - name: dbt build
+        working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+        run: dbt build --target ci
+
+      # dbt's tests check shape. This checks that the quality models still
+      # detect the defects, which is the part that would fail silently.
+      - name: Assert the quality models caught the seeded defects
+        run: python ci/assert_quality.py --db data/ci.duckdb
+
+      - name: Upload dbt run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-target
+          path: dbt/target/
+          retention-days: 7

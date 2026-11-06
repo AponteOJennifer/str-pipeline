@@ -1,8 +1,21 @@
 # Short-Term Rental Pricing & Demand Pipeline
 
-An orchestrated pipeline that ingests Inside Airbnb data, models it into analytics
-tables, and estimates occupancy, average daily rate, and RevPAR by neighbourhood and
-season for a short-term rental market.
+[![ci](https://github.com/AponteOJennifer/str-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/AponteOJennifer/str-pipeline/actions/workflows/ci.yml)
+
+An Airflow and dbt pipeline that turns Inside Airbnb snapshots into the three
+numbers hotel revenue management runs on, occupancy, ADR and RevPAR, and adds a
+backtested weekly demand forecast on top of them.
+
+**146,490 listing-months modelled · 24 tests on every build · demand forecast at
+7.83% MAPE twelve weeks out, 34% better than a seasonal baseline**
+
+The pipeline's more interesting output was what it found in its own inputs. Two
+of the four source snapshots are defective in ways a row-count check passes
+without complaint: one contains every listing and no prices at all, and another
+is missing 2,533 listings that a listing-ID trace identifies as missed by the
+scrape rather than delisted from the market. Both are now caught automatically.
+[The findings are below](#results), along with the two modelling approaches the
+backtest ruled out.
 
 > **Status:** complete. Orchestrated ingestion, a tested dbt modelling
 > layer, and a backtested weekly demand forecast written back to the

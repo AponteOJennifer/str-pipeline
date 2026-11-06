@@ -2,6 +2,13 @@ str_pipeline:
   target: dev
   outputs:
     dev:
+      # dev points at the real warehouse built by Airflow.
+      # ci points at the small fixture ci/build_fixture.py writes,
+      # so continuous integration never touches local data.
       type: duckdb
       path: ../data/warehouse.duckdb
+      threads: 4
+    ci:
+      type: duckdb
+      path: ../data/ci.duckdb
       threads: 4
