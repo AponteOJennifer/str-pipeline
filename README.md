@@ -4,8 +4,9 @@ An orchestrated pipeline that ingests Inside Airbnb data, models it into analyti
 tables, and estimates occupancy, average daily rate, and RevPAR by neighborhood and
 season for a short-term rental market.
 
-> **Status:** weekend 1 of 3. Ingestion and orchestration are in place. dbt models and
-> the forecast come next.
+> **Status:** complete. Orchestrated ingestion, a tested dbt modelling
+> layer, and a backtested weekly demand forecast written back to the
+> warehouse.
 
 ---
 
