@@ -61,10 +61,12 @@ dbt      mart_forecast_accuracy, mart_forecast_vs_actual
 before inserting. Rerunning a date never duplicates rows, which matters because
 backfills get rerun.
 
-**Skip, don't fail, on missing snapshots.** Inside Airbnb publishes on an irregular
-cadence, so most months have no file. A 404 raises `AirflowSkipException` rather than
-an error, so a backfill over a two-year range completes instead of filling the UI
-with red.
+**An explicit snapshot list, not a schedule.** Inside Airbnb publishes on no
+fixed cadence and on arbitrary days of the month, so a cron schedule with
+catchup would request dates that mostly do not exist and almost every run would
+404. The DAG takes an explicit list of snapshot dates instead and fans out one
+task per (snapshot, table) pair using dynamic task mapping, so each file carries
+its own retries and one bad download cannot take the run down with it.
 
 **Schema drift is logged, not fatal.** Column names have changed across years of
 snapshots. Missing columns are logged and the run continues, so older snapshots still
@@ -78,7 +80,8 @@ with locally.
 
 ## Running it
 
-Requires Python 3.9+. On Windows, run this under WSL.
+Requires Python 3.12. Airflow 2.10 does not support 3.13 or later, so a newer
+interpreter will fail to install it. On Windows, run this under WSL.
 
 ```bash
 git clone <this repo> && cd str-pipeline
@@ -96,7 +99,10 @@ airflow standalone
 The UI comes up at `http://localhost:8080`. The generated admin password is printed
 in the terminal and also written to `.airflow/simple_auth_manager_passwords.json.generated`.
 
-Unpause `insideairbnb_ingest` and it begins backfilling from the start date.
+`insideairbnb_ingest` is triggered manually rather than scheduled, because the
+source has no cadence to follow. Put the snapshot dates you want in `SNAPSHOTS`
+at the top of the DAG and trigger it. Loads are idempotent, so re-triggering a
+date that is already loaded leaves row counts unchanged.
 
 ---
 
