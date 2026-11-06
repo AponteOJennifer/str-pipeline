@@ -1,7 +1,7 @@
 # Short-Term Rental Pricing & Demand Pipeline
 
 An orchestrated pipeline that ingests Inside Airbnb data, models it into analytics
-tables, and estimates occupancy, average daily rate, and RevPAR by neighborhood and
+tables, and estimates occupancy, average daily rate, and RevPAR by neighbourhood and
 season for a short-term rental market.
 
 > **Status:** complete. Orchestrated ingestion, a tested dbt modelling
@@ -145,8 +145,94 @@ the host and the snapshot date.
 
 ## Results
 
-Data quality: the March 2026 snapshot is incomplete.
-Listing counts hold around 11,100 to 11,300 across three snapshots but drop to 8,170 in March 2026. The drop is not proportional across room types, which rules out uniform sampling loss. Tracing individual listing IDs, 2,533 listings present in December are absent in March and present again in June, accounting for 82 percent of the shortfall. Listings do not exit and re-enter a market within a quarter, so the March snapshot is treated as incomplete and excluded from trend analysis rather than modeled on.
+Four Austin snapshots: 22 December 2025, 25 March 2026, 22 June 2026, and
+17 September 2026. 41,827 listing-snapshot rows and 2,479,896 raw review rows,
+deduplicated to one row per review ID. Reruns are safe: the merge deletes the
+`(city, snapshot_date)` partition before inserting, so a reloaded snapshot
+leaves row counts unchanged.
+
+The analytics layer produces 146,490 listing-months spanning October 2023 to
+September 2026. 22,963 of those carry a rate. That gap is the finding below.
+
+### Two of the four snapshots are defective, in two different ways
+
+**March 2026 is an incomplete scrape.** It returned 8,170 listings against a
+market median of 11,181, a 27 percent shortfall. Tracing listing IDs across
+snapshots, 2,533 listings present in both December and June are absent from
+March: 84 percent of the 3,011-listing gap. A listing cannot leave the market
+and come back, so those were missed rather than delisted. Left in, the snapshot
+reads as a market collapse and recovery that never happened.
+
+**December 2025 has every listing and no prices.** All 11,251 listings are
+there; the price column is empty for every one of them. A row-count check
+passes this snapshot without complaint.
+
+These are different failures and they disqualify a snapshot for different
+purposes, so the pipeline evaluates them separately. `is_complete` governs
+anything that counts or sizes the market. `has_usable_rates` governs the rate
+lookup. December is complete and unusable for rate; March is usable for rate
+and incomplete. Collapsing the two into one flag is what let the December
+snapshot anchor every rate in the warehouse and silently empty the fact table.
+
+Both tests run on every build as dbt tests at `warn` severity, so a bad
+snapshot announces itself rather than being discovered in a chart weeks later.
+
+### Demand reproduces Austin's event calendar
+
+Reviews as a stay proxy recover the city's real seasonality without any event
+data as input:
+
+| Month | Reviews | Month | Reviews |
+|---|---|---|---|
+| Jan 2025 | 8,126 | Jan 2026 | 9,115 |
+| Mar 2025 | 15,228 | Mar 2026 | 16,603 |
+| Oct 2025 | 16,437 | Jun 2026 | 12,869 |
+| Dec 2025 | 9,426 | Aug 2026 | 12,309 |
+
+March is SXSW. October is Austin City Limits. January is the trough in both
+years. Peak to trough is roughly 2x, and the year over year comparison shows
+about 10 percent growth on top of the seasonal pattern.
+
+### Rate and RevPAR, April to August 2026
+
+| Month | Median ADR | Median occupancy | Median RevPAR |
+|---|---|---|---|
+| Apr 2026 | $249.50 | 0.446 | $136.48 |
+| May 2026 | $257.50 | 0.461 | $143.30 |
+| Jun 2026 | $258.63 | 0.440 | $137.09 |
+| Jul 2026 | $244.00 | 0.464 | $133.37 |
+| Aug 2026 | $224.06 | 0.450 | $122.44 |
+
+**Read the ADR column with care.** April, May and June all draw their price
+from the same March snapshot, so no listing was repriced between them. The
+median moves because the set of listings with reviews changes month to month.
+This is a composition effect, not a pricing signal, and with three price
+snapshots a monthly repricing series is not observable at all. The occupancy
+and demand columns are not subject to this; they come from review dates
+directly.
+
+---
+
+## Known limitations
+
+**The occupancy estimator runs hot at the top end.** Occupancy is derived as
+estimated stays times assumed length of stay, divided by days in month, capped
+at 70 percent. High-review listings hit that ceiling, which compresses the
+upper tail. The cap, the review rate, and the length of stay are all dbt vars,
+so the sensitivity is testable, but none of them are calibrated against real
+booking data because none exists in this source.
+
+**Rate is a listed rate, not an achieved rate.** RevPAR here is an upper bound.
+Discounts, cleaning fees and length-of-stay pricing are invisible.
+
+**Demand before December 2025 is survivorship-biased.** Attributes come from
+the snapshots, so a listing delisted before the first snapshot has reviews but
+no neighbourhood and never enters the fact table. The further back the series
+runs, the more it reflects only listings that survived into the snapshot
+window. `demand_months` controls the depth of that tradeoff.
+
+**Neighbourhoods are ZIP codes.** That is how Austin's Inside Airbnb data
+publishes `neighbourhood_cleansed`, not a modelling choice.
 
 ---
 
@@ -256,25 +342,53 @@ never be evaluated, and a forecast nobody can score is not a forecast.
 
 ## What I would do differently at scale
 
-<!-- Write this after weekend 3. Honest tradeoffs, not a feature list. Candidates:
-     - DuckDB is right for a laptop and wrong for a team; what would change on Snowflake
-     - snapshot-based sources vs. true incremental appends
-     - where the occupancy estimate breaks down and what would validate it -->
+**Ingest the calendar file.** Three price snapshots is the binding constraint
+on this whole project, and it is the one limitation that is fixable from the
+same source. `calendar.csv.gz` carries forward-looking nightly prices per
+listing per date. That would replace an as-of join against three snapshots with
+a real daily rate series, make month over month repricing observable, and let
+availability be measured rather than inferred from reviews. It is also two
+orders of magnitude more data, which is why it was out of scope here and why it
+would be the first thing added.
 
-_To be filled in._
+**DuckDB is right for one analyst and wrong for a team.** It is a single file
+with no concurrent writers, so two people cannot build at once and there is no
+access control. The dbt layer would move to Snowflake or BigQuery unchanged
+beyond the profile; the Airflow tasks would write Parquet to object storage and
+`COPY INTO` rather than inserting locally. Nothing in the modelling would need
+to change, which is the point of keeping the warehouse-specific code confined
+to the ingest step.
+
+**Snapshots are a bad source contract and I would stop pretending otherwise.**
+Each file is a full restatement of the market on one arbitrary day. Everything
+awkward in this project traces back to that: the as-of join, the completeness
+tests, the partial trailing month. With an event stream the grain would be the
+change, not the file, and the fact table would be incremental rather than a
+full rebuild. Given snapshots, the right move is the one taken here, which is
+to treat every snapshot as suspect until tested and to record which snapshot
+each number came from, so a wrong figure can be traced back to the file that
+produced it.
+
+**Validating the occupancy estimate needs outside data.** The review-rate
+assumption is the largest single source of error and nothing in this source can
+check it. The honest test is a handful of real operators' booking data, or a
+published benchmark such as AirDNA or STR, compared against the estimate for
+the same market and period. Until that comparison exists, the occupancy
+numbers are internally consistent and externally unverified, and should be
+described that way.
 
 **Forecast by neighbourhood, not just citywide.** The current forecast is one
 series for Austin. A revenue manager prices a building, not a city, and the
 neighbourhood panel already exists in `mart_neighbourhood_demand_monthly`.
 Doing it properly means forecasting at both levels and reconciling them so the
 parts sum to the whole, which is a real problem rather than a loop over ZIP
-codes: thin cells are noisy, and an unreconciled set of local forecasts will not
-add up to the citywide number anyone is held to.
+codes: thin cells are noisy, and an unreconciled set of local forecasts will
+not add up to the citywide number anyone is held to.
 
-**Get the event calendar right rather than inferring it.** The largest remaining
-error cluster is festival timing drift, and the fix that works on synthetic data
-loses on real data because it blurs every ordinary week to help a handful.
-Aligning on actual published SXSW, ACL and Grand Prix dates would target only
-the weeks that need it. That needs a maintained event calendar, including future
-dates, which is exactly the kind of dependency worth being explicit about before
-taking it on.
+**Get the event calendar right rather than inferring it.** The largest
+remaining error cluster is festival timing drift, and the fix that works on
+synthetic data loses on real data because it blurs every ordinary week to help
+a handful. Aligning on actual published SXSW, ACL and Grand Prix dates would
+target only the weeks that need it. That needs a maintained event calendar,
+including future dates, which is exactly the kind of dependency worth being
+explicit about before taking it on.
