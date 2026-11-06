@@ -1,0 +1,29 @@
+version: 2
+
+sources:
+  - name: forecast
+    description: >
+      Tables written by the Python forecasting step rather than by dbt. Declared
+      as a source so the lineage graph shows the dependency honestly: these are
+      inputs to dbt, produced upstream, exactly like the raw ingest tables.
+    schema: main
+    tables:
+      - name: forecast_weekly
+        description: >
+          One row per model, training vintage and target week. trained_through
+          is part of the key, so each refresh adds a vintage instead of
+          overwriting the last one and past forecasts stay scoreable.
+        columns:
+          - name: forecast
+            tests: [not_null]
+          - name: target_week
+            tests: [not_null]
+      - name: forecast_backtest
+        description: >
+          Every scored prediction from the rolling-origin backtest, one row per
+          model, origin and target week.
+        columns:
+          - name: model
+            tests: [not_null]
+          - name: horizon
+            tests: [not_null]
